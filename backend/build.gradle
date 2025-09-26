@@ -5,7 +5,7 @@ plugins {
 }
 
 group = 'edu.itmo.is.lab1'
-version = '0.0.1-SNAPSHOT'
+version = ''
 java {
     toolchain { languageVersion = JavaLanguageVersion.of(17) }
 }
@@ -36,4 +36,32 @@ dependencies {
 }
 
 tasks.test { useJUnitPlatform() }
+
+
+def frontendDir = "${rootDir}/frontend"
+def frontendBuildDir = file("${frontendDir}/dist").exists() ? "${frontendDir}/dist" : "${frontendDir}/build"
+
+tasks.register('frontendInstall', Exec) {
+    workingDir frontendDir
+    commandLine 'bash','-lc','if [ -f pnpm-lock.yaml ]; then corepack enable && pnpm i; elif [ -f yarn.lock ]; then corepack enable && yarn install; else npm ci || npm i; fi'
+    onlyIf { file(frontendDir).exists() }
+}
+
+tasks.register('frontendBuild', Exec) {
+    dependsOn 'frontendInstall'
+    workingDir frontendDir
+    commandLine 'bash','-lc','if [ -f pnpm-lock.yaml ]; then pnpm build; elif [ -f yarn.lock ]; then yarn build; else npm run build; fi'
+    onlyIf { file(frontendDir).exists() }
+}
+
+tasks.register('copyFrontend', Copy) {
+    dependsOn 'frontendBuild'
+    from(frontendBuildDir)
+    into("${projectDir}/src/main/resources/static")
+    onlyIf { file(frontendDir).exists() }
+}
+
+tasks.named('processResources') {
+    dependsOn 'copyFrontend'
+}
 

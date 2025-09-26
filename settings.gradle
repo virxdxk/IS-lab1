@@ -1,8 +1,2 @@
-pluginManagement {
-    repositories {
-        gradlePluginPortal()
-        mavenCentral()
-    }
-}
 rootProject.name = 'IS-lab1'
-include('app')
+include('backend')
