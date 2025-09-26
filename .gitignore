@@ -1,1 +1,28 @@
+# build output
+/build/
+**/build/
+out/
+
+# gradle
+.gradle/
+!gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.properties
+
+# IDEs
 .idea/
+*.iml
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# logs & reports
+*.log
+*.tmp
+*.swp
+
+# coverage / test reports
+*.jacoco
+/test-results/
+/reports/
