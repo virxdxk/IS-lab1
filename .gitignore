@@ -61,3 +61,5 @@ Thumbs.db
 # Coverage (frontend/backend)
 # ==============================
 coverage
+
+.env
