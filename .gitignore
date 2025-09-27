@@ -16,6 +16,7 @@ out/
 /frontend/node_modules
 /frontend/dist
 /frontend/dist-ssr
+/frontend/src/package-lock.json
 
 # Lock & debug logs
 logs
@@ -33,6 +34,7 @@ lerna-debug.log*
 # IDEs & Editors
 # ==============================
 .idea/
+frontend/.idea/
 *.iml
 .vscode/*
 !.vscode/extensions.json
