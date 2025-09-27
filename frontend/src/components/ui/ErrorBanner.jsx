@@ -1,0 +1,1 @@
+export default function ErrorBanner({ msg }){ if(!msg) return null; return (<div className="bg-red-50 text-red-700 border border-red-200 rounded-lg p-3 text-sm">{msg}</div>); }
