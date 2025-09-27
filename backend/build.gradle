@@ -35,7 +35,9 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
 }
 
-tasks.test { useJUnitPlatform() }
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+}
 
 
 def frontendDir = "${rootDir}/frontend"
