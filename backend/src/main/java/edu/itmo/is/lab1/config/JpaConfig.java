@@ -11,6 +11,7 @@ import org.springframework.orm.jpa.vendor.EclipseLinkJpaVendorAdapter;
 import org.springframework.orm.jpa.JpaTransactionManager;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.boot.jdbc.DataSourceBuilder;
+import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import javax.sql.DataSource;
 import java.util.HashMap;
@@ -24,9 +25,12 @@ public class JpaConfig {
 
     @Bean
     @Primary
+    @ConfigurationProperties(prefix = "spring.datasource")
     public DataSource dataSource() {
-        // Использует spring.datasource.* из application.properties/yaml
-        return DataSourceBuilder.create().build();
+        // Свяжет spring.datasource.* из env/application.properties c пулом Hikari
+        return DataSourceBuilder.create()
+                .type(com.zaxxer.hikari.HikariDataSource.class)
+                .build();
     }
 
     @Bean(name = "entityManagerFactory")
@@ -38,7 +42,6 @@ public class JpaConfig {
         Map<String, Object> props = new HashMap<>();
         props.put("eclipselink.weaving", "false");
         props.put("eclipselink.ddl-generation", "none");
-        // Для Postgres в рантайме:
         props.put("eclipselink.target-database", "org.eclipse.persistence.platform.database.PostgreSQLPlatform");
 
         var emf = new LocalContainerEntityManagerFactoryBean();
