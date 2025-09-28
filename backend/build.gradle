@@ -2,14 +2,11 @@ plugins {
     id 'java'
     id 'org.springframework.boot' version '3.3.3'
     id 'io.spring.dependency-management' version '1.1.6'
-    id 'com.github.node-gradle.node' version '7.0.2'
 }
 
 group = 'edu.itmo.is.lab1'
 version = ''
-java {
-    toolchain { languageVersion = JavaLanguageVersion.of(17) }
-}
+java { toolchain { languageVersion = JavaLanguageVersion.of(17) } }
 
 repositories { mavenCentral() }
 
@@ -18,31 +15,25 @@ configurations.configureEach {
 }
 
 dependencies {
-    implementation 'org.springframework.boot:spring-boot-starter-web'         // MVC
-    implementation 'org.springframework.boot:spring-boot-starter-validation'  // Bean Validation
-    implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'   // UI
-    implementation 'org.springframework.boot:spring-boot-starter-websocket'   // STOMP
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
+    implementation 'org.springframework.boot:spring-boot-starter-websocket'
 
-    // Data JPA БЕЗ Hibernate + EclipseLink
     implementation('org.springframework.boot:spring-boot-starter-data-jpa') {
         exclude group: 'org.hibernate.orm', module: 'hibernate-core'
     }
-    implementation 'org.eclipse.persistence:org.eclipse.persistence.jpa:4.0.2' // EclipseLink (Jakarta)
-    implementation 'org.postgresql:postgresql:42.7.3'                          // прод-БД
+    implementation 'org.eclipse.persistence:org.eclipse.persistence.jpa:4.0.2'
+    implementation 'org.postgresql:postgresql:42.7.3'
 
-    // Миграции
     implementation 'org.flywaydb:flyway-core:10.16.0'
     implementation 'org.flywaydb:flyway-database-postgresql:10.16.0'
 
-    // Удобства
     compileOnly 'org.projectlombok:lombok:1.18.32'
     annotationProcessor 'org.projectlombok:lombok:1.18.32'
 
-    // Тесты: H2 + spring-boot-starter-test (без Hibernate он не подтянется)
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'com.h2database:h2:2.2.224'
 }
 
-tasks.withType(Test).configureEach {
-    useJUnitPlatform()
-}
+tasks.withType(Test).configureEach { useJUnitPlatform() }

@@ -1,7 +1,58 @@
-plugins {}
+plugins {
+    id 'base'
+}
+
+ext {
+    // имена образов
+    backendImage  = 'is-lab1-backend'
+    frontendImage = 'is-lab1-frontend'
+
+    // бинарь docker
+    dockerBin = System.getenv('DOCKER_BIN') ?: 'docker'
+
+    // compose файлы
+    composeFiles = ['-f', 'docker-compose.yml', '-f', 'docker-compose.localdb.yml']
+
+    // .env (если есть — подставим, нет — не добавляем)
+    composeEnv = file('.env').exists() ? ['--env-file', '.env'] : []
+}
 
 subprojects {
-    repositories {
-        mavenCentral()
-    }
+    repositories { mavenCentral() }
 }
+
+/** docker build backend */
+tasks.register('dockerBuildBackend', Exec) {
+    workingDir = file('backend')
+    commandLine dockerBin, 'build', '--pull', '--no-cache', '-t', backendImage, '.'
+}
+
+/** docker build frontend */
+tasks.register('dockerBuildFrontend', Exec) {
+    workingDir = file('frontend')
+    commandLine dockerBin, 'build', '--pull', '--no-cache', '-t', frontendImage, '.'
+}
+
+/** docker build обеих */
+tasks.register('dockerBuildAll') {
+    dependsOn 'dockerBuildBackend', 'dockerBuildFrontend'
+}
+
+/** docker compose up -d --build */
+tasks.register('composeUp', Exec) {
+    commandLine([dockerBin, 'compose'] + composeEnv + composeFiles + ['up', '-d', '--build'])
+}
+
+/** docker compose down */
+tasks.register('composeDown', Exec) {
+    commandLine([dockerBin, 'compose'] + composeEnv + composeFiles + ['down'])
+}
+
+/** docker compose down -v */
+tasks.register('composeDownVolumes', Exec) {
+    commandLine([dockerBin, 'compose'] + composeEnv + composeFiles + ['down', '-v'])
+}
+
+/** алиасы */
+tasks.register('up')   { dependsOn 'composeUp' }
+tasks.register('down') { dependsOn 'composeDown' }

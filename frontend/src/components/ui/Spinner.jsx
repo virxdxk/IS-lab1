@@ -1,3 +1,8 @@
 export default function Spinner(){
-    return (<div className="flex items-center gap-2 text-sm opacity-70"><div className="animate-spin rounded-full h-4 w-4 border border-gray-400 border-t-transparent"/>loading...</div>);
+    return (
+        <div className="flex items-center gap-3 text-sm text-red-400 font-medium">
+            <div className="animate-spin rounded-full h-5 w-5 border-2 demonic-spinner"></div>
+            <span className="flicker-text">LOADING DARK MAGIC...</span>
+        </div>
+    );
 }
