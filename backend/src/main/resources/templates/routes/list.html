@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8"/>
+    <title>Routes</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+</head>
+<body>
+<h1>Routes</h1>
+<pre id="out">loading…</pre>
+
+<script>
+    // Если API висит за nginx на /api
+    fetch('/api/routes?page=0&size=10&sort=id,asc')
+      .then(r => r.json())
+      .then(data => { document.getElementById('out').textContent = JSON.stringify(data, null, 2); })
+      .catch(e => { document.getElementById('out').textContent = 'Ошибка: ' + e; });
+</script>
+</body>
+</html>

@@ -7,8 +7,12 @@ services:
     environment:
       # По умолчанию целимся в хост 'pg' (на helious он существует)
       SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:-jdbc:postgresql://pg:5432/studs}
+      SPRING_DATASOURCE_JDBC_URL: ${SPRING_DATASOURCE_URL:-jdbc:postgresql://pg:5432/studs}
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-studs}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-studs}
+      SPRING_JPA_HIBERNATE_DDL_AUTO: "none"
+      SPRING_FLYWAY_ENABLED: "true"
+      SPRING_SQL_INIT_MODE: "never"
     ports:
       - "8080:8080"
     restart: unless-stopped

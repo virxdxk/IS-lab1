@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   pg:
     image: postgres:16-alpine
@@ -28,11 +26,17 @@ services:
     env_file:
       - .env
     environment:
+      SPRING_PROFILES_ACTIVE: default
+
+      # ВАЖНО: явный jdbc-url, чтобы Hikari точно увидел URL
       SPRING_DATASOURCE_URL: ${DB_URL:-jdbc:postgresql://pg:5432/studs}
+      SPRING_DATASOURCE_JDBC_URL: ${DB_URL:-jdbc:postgresql://pg:5432/studs}
       SPRING_DATASOURCE_USERNAME: ${DB_USER:-postgres}
       SPRING_DATASOURCE_PASSWORD: ${DB_PASS:-postgres}
+
       SPRING_JPA_HIBERNATE_DDL_AUTO: "none"
       SPRING_FLYWAY_ENABLED: "true"
+      SPRING_SQL_INIT_MODE: "never"
     restart: unless-stopped
 
 volumes:
