@@ -2,48 +2,50 @@ package edu.itmo.is.lab1.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Profile;
 import org.springframework.context.annotation.Primary;
+import org.springframework.context.annotation.Profile;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
-import org.springframework.transaction.annotation.EnableTransactionManagement;
+import org.springframework.orm.jpa.JpaTransactionManager;
 import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
 import org.springframework.orm.jpa.vendor.EclipseLinkJpaVendorAdapter;
-import org.springframework.orm.jpa.JpaTransactionManager;
 import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.boot.jdbc.DataSourceBuilder;
 
 import javax.sql.DataSource;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import java.util.HashMap;
 import java.util.Map;
 
 @Configuration
-@Profile("!test")
-@EnableTransactionManagement
+@Profile("test")
 @EnableJpaRepositories(basePackages = "edu.itmo.is.lab1.repositories")
-public class JpaConfig {
+public class TestJpaConfig {
 
     @Bean
     @Primary
     public DataSource dataSource() {
-        // Использует spring.datasource.* из application.properties/yaml
-        return DataSourceBuilder.create().build();
+        var ds = new DriverManagerDataSource();
+        ds.setDriverClassName("org.h2.Driver");
+        ds.setUrl("jdbc:h2:mem:islab1;MODE=PostgreSQL;DATABASE_TO_UPPER=false;DB_CLOSE_DELAY=-1;INIT=CREATE SCHEMA IF NOT EXISTS public");
+        ds.setUsername("sa");
+        ds.setPassword("");
+        return ds;
     }
 
-    @Bean(name = "entityManagerFactory")
+    @Bean
     public LocalContainerEntityManagerFactoryBean entityManagerFactory(DataSource ds) {
         var vendor = new EclipseLinkJpaVendorAdapter();
-        vendor.setGenerateDdl(false);
-        vendor.setShowSql(true);
+        vendor.setGenerateDdl(true);
+        vendor.setShowSql(false);
 
         Map<String, Object> props = new HashMap<>();
         props.put("eclipselink.weaving", "false");
-        props.put("eclipselink.ddl-generation", "none");
-        // Для Postgres в рантайме:
-        props.put("eclipselink.target-database", "org.eclipse.persistence.platform.database.PostgreSQLPlatform");
+        props.put("eclipselink.ddl-generation", "drop-and-create-tables");
+        props.put("eclipselink.ddl-generation.output-mode", "database");
+        props.put("eclipselink.target-database", "org.eclipse.persistence.platform.database.H2Platform");
 
         var emf = new LocalContainerEntityManagerFactoryBean();
-        emf.setDataSource(ds);
         emf.setJpaVendorAdapter(vendor);
+        emf.setDataSource(ds);
         emf.setPackagesToScan("edu.itmo.is.lab1.entities");
         emf.setJpaPropertyMap(props);
         return emf;
@@ -51,6 +53,8 @@ public class JpaConfig {
 
     @Bean
     public PlatformTransactionManager transactionManager(LocalContainerEntityManagerFactoryBean emf) {
-        return new JpaTransactionManager(emf.getObject());
+        var tx = new JpaTransactionManager();
+        tx.setEntityManagerFactory(emf.getObject());
+        return tx;
     }
 }

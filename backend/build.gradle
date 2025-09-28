@@ -13,65 +13,36 @@ java {
 
 repositories { mavenCentral() }
 
+configurations.configureEach {
+    exclude group: 'org.hibernate.orm', module: 'hibernate-core'
+}
+
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-web'         // MVC
     implementation 'org.springframework.boot:spring-boot-starter-validation'  // Bean Validation
     implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'   // UI
     implementation 'org.springframework.boot:spring-boot-starter-websocket'   // STOMP
 
-    // Data JPA без Hibernate + EclipseLink
+    // Data JPA БЕЗ Hibernate + EclipseLink
     implementation('org.springframework.boot:spring-boot-starter-data-jpa') {
-        exclude group: 'org.hibernate', module: 'hibernate-core'
+        exclude group: 'org.hibernate.orm', module: 'hibernate-core'
     }
     implementation 'org.eclipse.persistence:org.eclipse.persistence.jpa:4.0.2' // EclipseLink (Jakarta)
-    implementation 'org.postgresql:postgresql:42.7.3'
+    implementation 'org.postgresql:postgresql:42.7.3'                          // прод-БД
 
     // Миграции
     implementation 'org.flywaydb:flyway-core:10.16.0'
     implementation 'org.flywaydb:flyway-database-postgresql:10.16.0'
 
-    // удобства
+    // Удобства
     compileOnly 'org.projectlombok:lombok:1.18.32'
     annotationProcessor 'org.projectlombok:lombok:1.18.32'
+
+    // Тесты: H2 + spring-boot-starter-test (без Hibernate он не подтянется)
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'com.h2database:h2:2.2.224'
 }
 
 tasks.withType(Test).configureEach {
     useJUnitPlatform()
-}
-
-def frontendDir = "${rootDir}/frontend"
-def frontendBuildDir = file("${frontendDir}/dist").exists() ? "${frontendDir}/dist" : "${frontendDir}/build"
-
-// Настройки node для фронта
-node {
-    download = true            // Gradle сам качает Node.js
-    version = "22.12.0"        // Совместимая версия для Vite 7
-    npmVersion = "10.9.0"
-    workDir = file("${rootDir}/.gradle/nodejs")
-    npmWorkDir = file("${rootDir}/.gradle/npm")
-}
-
-tasks.register('frontendInstall', com.github.gradle.node.npm.task.NpmTask) {
-    workingDir = file(frontendDir)
-    args = ['ci']
-    onlyIf { file(frontendDir).exists() }
-}
-
-tasks.register('frontendBuild', com.github.gradle.node.npm.task.NpmTask) {
-    dependsOn 'frontendInstall'
-    workingDir = file(frontendDir)
-    args = ['run', 'build']
-    onlyIf { file(frontendDir).exists() }
-}
-
-tasks.register('copyFrontend', Copy) {
-    dependsOn 'frontendBuild'
-    from(frontendBuildDir)
-    into("${projectDir}/src/main/resources/static")
-    onlyIf { file(frontendDir).exists() }
-}
-
-tasks.named('processResources') {
-    dependsOn 'copyFrontend'
 }
