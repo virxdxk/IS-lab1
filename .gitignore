@@ -17,6 +17,7 @@ out/
 /frontend/dist
 /frontend/dist-ssr
 /frontend/src/package-lock.json
+/frontend/.nvmrc
 
 # Lock & debug logs
 logs
