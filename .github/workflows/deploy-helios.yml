@@ -1,0 +1,55 @@
+name: Deploy to Helios
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    env:
+      APP_DIR: ${{ secrets.APP_DIR }}
+      HELIOS_HOST: ${{ secrets.HELIOS_HOST }}
+      HELIOS_USER: ${{ secrets.HELIOS_USER }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create deploy bundle
+        run: |
+          # Сформируем тар с нужными файлами для сборки на Helios
+          tar -czf bundle.tar.gz \
+            docker-compose.yml \
+            compose.helios.yml \
+            backend \
+            frontend \
+            deploy/helios-deploy.sh
+
+      - name: Prepare SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.HELIOS_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "${HELIOS_HOST}" >> ~/.ssh/known_hosts
+
+      - name: Upload bundle to Helios
+        run: |
+          ssh -i ~/.ssh/id_ed25519 ${HELIOS_USER}@${HELIOS_HOST} "mkdir -p ${APP_DIR}"
+          scp -i ~/.ssh/id_ed25519 bundle.tar.gz ${HELIOS_USER}@${HELIOS_HOST}:${APP_DIR}/bundle.tar.gz
+
+      - name: Run deploy script on Helios
+        env:
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASS: ${{ secrets.DB_PASS }}
+        run: |
+          # Передадим переменные окружения с кредами БД в удалённую сессию
+          ssh -i ~/.ssh/id_ed25519 ${HELIOS_USER}@${HELIOS_HOST} \
+            "export APP_DIR='${APP_DIR}'; export DB_USER='${DB_USER}'; export DB_PASS='${DB_PASS}'; bash -lc '${APP_DIR}/deploy/helios-deploy.sh'"
+
+      - name: Show running services
+        run: |
+          ssh -i ~/.ssh/id_ed25519 ${HELIOS_USER}@${HELIOS_HOST} \
+            "docker compose -f ${APP_DIR}/docker-compose.yml -f ${APP_DIR}/compose.helios.yml ps"

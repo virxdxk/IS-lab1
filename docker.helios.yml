@@ -1,0 +1,10 @@
+services:
+  backend:
+    environment:
+      SPRING_PROFILES_ACTIVE: helios
+      DB_USER: ${DB_USER}
+      DB_PASS: ${DB_PASS}
+    restart: unless-stopped
+
+  frontend:
+    restart: unless-stopped
