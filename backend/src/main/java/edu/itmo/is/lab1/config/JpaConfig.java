@@ -25,11 +25,14 @@ public class JpaConfig {
 
     @Bean
     @Primary
-    @ConfigurationProperties(prefix = "spring.datasource")
     public DataSource dataSource() {
         // Свяжет spring.datasource.* из env/application.properties c пулом Hikari
         return DataSourceBuilder.create()
                 .type(com.zaxxer.hikari.HikariDataSource.class)
+                .url("jdbc:postgresql://pg:5432/studs")
+                .username("postgres")
+                .password("postgres")
+                .driverClassName("org.postgresql.Driver")
                 .build();
     }
 
