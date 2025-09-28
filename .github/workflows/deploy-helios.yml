@@ -33,9 +33,11 @@ jobs:
 
       - name: Locate backend artifact
         id: locate_jar
+        shell: bash
         run: |
-          JAR=$(ls backend/build/libs/*-SNAPSHOT.jar || ls backend/build/libs/*.jar | head -n1)
-          echo "jar_path=${JAR}" >> $GITHUB_OUTPUT
+          set -euo pipefail
+          JAR=$(ls backend/build/libs/*-SNAPSHOT.jar 2>/dev/null || ls backend/build/libs/*.jar | head -n1)
+          echo "jar_path=${JAR}" >> "$GITHUB_OUTPUT"
 
       # ---------- Build frontend (static)
       - name: Set up Node
@@ -60,27 +62,45 @@ jobs:
           cp -r deploy/start_backend.sh deploy/stop_backend.sh release/deploy/
           tar -czf bundle.tar.gz -C release .
 
+      # ---------- Validate secrets (early fail with message)
+      - name: Validate secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${{ secrets.HELIOS_HOST }}" || { echo "HELIOS_HOST is empty"; exit 1; }
+          test -n "${{ secrets.HELIOS_USER }}" || { echo "HELIOS_USER is empty"; exit 1; }
+          test -n "${{ secrets.HELIOS_SSH_KEY }}" || { echo "HELIOS_SSH_KEY is empty"; exit 1; }
+          test -n "${{ secrets.APP_DIR }}" || { echo "APP_DIR is empty"; exit 1; }
+          test -n "${{ secrets.DB_USER }}" || { echo "DB_USER is empty"; exit 1; }
+          test -n "${{ secrets.DB_PASS }}" || { echo "DB_PASS is empty"; exit 1; }
+
       # ---------- Prepare SSH
       - name: Prepare SSH key
+        shell: bash
         run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.HELIOS_SSH_KEY }}" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -H "${HELIOS_HOST}" >> ~/.ssh/known_hosts
+          set -euxo pipefail
+          install -m 700 -d "$HOME/.ssh"
+          # важно: printf сохраняет переводы строк
+          printf '%s\n' "${{ secrets.HELIOS_SSH_KEY }}" > "$HOME/.ssh/id_ed25519"
+          chmod 600 "$HOME/.ssh/id_ed25519"
+          # known_hosts может не ответить мгновенно — не валим job
+          ssh-keyscan -T 5 -H "${HELIOS_HOST}" >> "$HOME/.ssh/known_hosts" 2>/dev/null || true
 
       # ---------- Upload bundle to Helios
       - name: Upload and unpack
+        shell: bash
         run: |
-          ssh -i ~/.ssh/id_ed25519 ${HELIOS_USER}@${HELIOS_HOST} "mkdir -p ${APP_DIR}/releases ${APP_DIR}/logs"
+          set -euo pipefail
+          ssh -i "$HOME/.ssh/id_ed25519" "${HELIOS_USER}@${HELIOS_HOST}" "mkdir -p '${APP_DIR}/releases' '${APP_DIR}/logs'"
           REL=${GITHUB_SHA::8}
-          scp -i ~/.ssh/id_ed25519 bundle.tar.gz ${HELIOS_USER}@${HELIOS_HOST}:${APP_DIR}/releases/${REL}.tar.gz
-          ssh -i ~/.ssh/id_ed25519 ${HELIOS_USER}@${HELIOS_HOST} bash -lc "
+          scp -i "$HOME/.ssh/id_ed25519" bundle.tar.gz "${HELIOS_USER}@${HELIOS_HOST}:${APP_DIR}/releases/${REL}.tar.gz"
+          ssh -i "$HOME/.ssh/id_ed25519" "${HELIOS_USER}@${HELIOS_HOST}" bash -lc "
             set -euo pipefail
-            REL=${REL}
+            REL='${REL}'
             APP_DIR='${APP_DIR}'
-            mkdir -p \$APP_DIR/releases/\$REL
-            tar -xzf \$APP_DIR/releases/\${REL}.tar.gz -C \$APP_DIR/releases/\$REL
-            rm -f \$APP_DIR/current && ln -s \$APP_DIR/releases/\$REL \$APP_DIR/current
+            mkdir -p \"\$APP_DIR/releases/\$REL\"
+            tar -xzf \"\$APP_DIR/releases/\$REL.tar.gz\" -C \"\$APP_DIR/releases/\$REL\"
+            rm -f \"\$APP_DIR/current\" && ln -s \"\$APP_DIR/releases/\$REL\" \"\$APP_DIR/current\"
           "
 
       # ---------- Restart backend in screen
@@ -88,15 +108,17 @@ jobs:
         env:
           DB_USER: ${{ secrets.DB_USER }}
           DB_PASS: ${{ secrets.DB_PASS }}
+        shell: bash
         run: |
-          ssh -i ~/.ssh/id_ed25519 ${HELIOS_USER}@${HELIOS_HOST} bash -lc "
+          set -euo pipefail
+          ssh -i "$HOME/.ssh/id_ed25519" "${HELIOS_USER}@${HELIOS_HOST}" bash -lc "
             export APP_DIR='${APP_DIR}'; export DB_USER='${DB_USER}'; export DB_PASS='${DB_PASS}';
-            chmod +x \$APP_DIR/current/deploy/start_backend.sh \$APP_DIR/current/deploy/stop_backend.sh || true
-            \$APP_DIR/current/deploy/stop_backend.sh || true
-            \$APP_DIR/current/deploy/start_backend.sh
+            chmod +x \"\$APP_DIR/current/deploy/start_backend.sh\" \"\$APP_DIR/current/deploy/stop_backend.sh\" || true
+            \"\$APP_DIR/current/deploy/stop_backend.sh\" || true
+            \"\$APP_DIR/current/deploy/start_backend.sh\"
           "
 
-      # ---------- Smoke test (опционально)
+      # ---------- Smoke test
       - name: Smoke test
         run: |
           # Если Helios доступен из интернета и порт 8080 открыт:
