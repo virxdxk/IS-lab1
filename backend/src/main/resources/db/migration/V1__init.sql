@@ -1,18 +1,28 @@
-create table locations (
-    id bigserial primary key,
-    x  bigint not null,
-    y  real not null,
-    name text not null
+-- coordinates (как отдельная сущность)
+CREATE TABLE coordinates (
+  id            INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  x             REAL NOT NULL,
+  y             DOUBLE PRECISION NOT NULL CHECK (y <= 49)
 );
 
-create table routes (
-    id serial primary key,
-    name text not null,
-    coord_x real not null,
-    coord_y double precision not null check (coord_y <= 49),
-    creation_date timestamp not null,
-    from_location_id bigint references locations(id) on delete restrict,
-    to_location_id   bigint references locations(id) on delete restrict,
-    distance double precision check (distance is null or distance > 1),
-    rating   double precision not null check (rating > 0)
+-- location
+CREATE TABLE location (
+  id            BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  x             BIGINT NOT NULL,
+  y             REAL NOT NULL,
+  name          TEXT  NOT NULL CHECK (length(trim(name)) > 0)
 );
+
+-- route
+CREATE TABLE route (
+  id             INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  name           TEXT NOT NULL CHECK (length(trim(name)) > 0),
+  coordinates_id INTEGER NOT NULL REFERENCES coordinates(id) ON DELETE RESTRICT,
+  creation_date  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  from_id        BIGINT REFERENCES location(id) ON DELETE RESTRICT,
+  to_id          BIGINT REFERENCES location(id) ON DELETE RESTRICT,
+  distance       DOUBLE PRECISION CHECK (distance IS NULL OR distance > 1),
+  rating         DOUBLE PRECISION NOT NULL CHECK (rating > 0)
+);
+
+CREATE INDEX idx_route_name ON route (name);
