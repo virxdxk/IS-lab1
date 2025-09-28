@@ -1,21 +1,36 @@
-# ====== build stage ======
+# syntax=docker/dockerfile:1
+
+########### build stage ###########
 FROM node:20-alpine AS builder
 WORKDIR /app
+
+# Важно: в build-стадии не режем dev-зависимости
+ENV NODE_ENV=development
+
+# Сначала только манифесты — для кэша
 COPY package*.json ./
-RUN npm ci
+
+# Ставим prod + dev зависимости (нужно для tailwind/postcss)
+RUN npm ci --include=dev
+
+# Теперь весь исходник
 COPY . .
-# Если Vite: npm run build кладёт в /dist
-# Если CRA: сборка в /build — nginx конфиг ниже уже учитывает /dist.
+
+# Сборка Vite -> /app/dist
 RUN npm run build
 
-# ====== run stage ======
-FROM nginx:1.27-alpine
-# Конфиг nginx для SPA + прокси на бэкенд
+
+########### run stage ###########
+FROM nginx:1.27-alpine AS runner
+
+# Прод-окружение в рантайме
+ENV NODE_ENV=production
+
+# Твой конфиг nginx (SPA + прокси на бэкенд, если настроено в nginx.conf)
 COPY nginx.conf /etc/nginx/conf.d/default.conf
-# Копируем статические файлы (Vite -> dist)
+
+# Готовые статики из билдера
 COPY --from=builder /app/dist /usr/share/nginx/html
-# Если у тебя CRA (react-scripts), то замени предыдущую строку на:
-# COPY --from=builder /app/build /usr/share/nginx/html
 
 EXPOSE 80
-CMD ["nginx","-g","daemon off;"]
+CMD ["nginx", "-g", "daemon off;"]
