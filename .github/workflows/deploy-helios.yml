@@ -1,0 +1,104 @@
+name: Deploy to Helios (no Docker)
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch: {}
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    env:
+      APP_DIR: ${{ secrets.APP_DIR }}
+      HELIOS_HOST: ${{ secrets.HELIOS_HOST }}
+      HELIOS_USER: ${{ secrets.HELIOS_USER }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ---------- Build backend (jar)
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Grant gradlew
+        run: chmod +x gradlew
+
+      - name: Build backend jar
+        run: ./gradlew :backend:clean :backend:bootJar
+
+      - name: Locate backend artifact
+        id: locate_jar
+        run: |
+          JAR=$(ls backend/build/libs/*-SNAPSHOT.jar || ls backend/build/libs/*.jar | head -n1)
+          echo "jar_path=${JAR}" >> $GITHUB_OUTPUT
+
+      # ---------- Build frontend (static)
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install deps & build frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      # ---------- Create release bundle
+      - name: Create bundle
+        run: |
+          mkdir -p release/backend release/frontend/dist release/deploy
+          cp "${{ steps.locate_jar.outputs.jar_path }}" release/backend/app.jar
+          cp -r frontend/dist/* release/frontend/dist/
+          cp -r deploy/start_backend.sh deploy/stop_backend.sh release/deploy/
+          tar -czf bundle.tar.gz -C release .
+
+      # ---------- Prepare SSH
+      - name: Prepare SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.HELIOS_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "${HELIOS_HOST}" >> ~/.ssh/known_hosts
+
+      # ---------- Upload bundle to Helios
+      - name: Upload and unpack
+        run: |
+          ssh -i ~/.ssh/id_ed25519 ${HELIOS_USER}@${HELIOS_HOST} "mkdir -p ${APP_DIR}/releases ${APP_DIR}/logs"
+          REL=${GITHUB_SHA::8}
+          scp -i ~/.ssh/id_ed25519 bundle.tar.gz ${HELIOS_USER}@${HELIOS_HOST}:${APP_DIR}/releases/${REL}.tar.gz
+          ssh -i ~/.ssh/id_ed25519 ${HELIOS_USER}@${HELIOS_HOST} bash -lc "
+            set -euo pipefail
+            REL=${REL}
+            APP_DIR='${APP_DIR}'
+            mkdir -p \$APP_DIR/releases/\$REL
+            tar -xzf \$APP_DIR/releases/\${REL}.tar.gz -C \$APP_DIR/releases/\$REL
+            rm -f \$APP_DIR/current && ln -s \$APP_DIR/releases/\$REL \$APP_DIR/current
+          "
+
+      # ---------- Restart backend in screen
+      - name: Restart backend via screen
+        env:
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASS: ${{ secrets.DB_PASS }}
+        run: |
+          ssh -i ~/.ssh/id_ed25519 ${HELIOS_USER}@${HELIOS_HOST} bash -lc "
+            export APP_DIR='${APP_DIR}'; export DB_USER='${DB_USER}'; export DB_PASS='${DB_PASS}';
+            chmod +x \$APP_DIR/current/deploy/start_backend.sh \$APP_DIR/current/deploy/stop_backend.sh || true
+            \$APP_DIR/current/deploy/stop_backend.sh || true
+            \$APP_DIR/current/deploy/start_backend.sh
+          "
+
+      # ---------- Smoke test (опционально)
+      - name: Smoke test
+        run: |
+          # Если Helios доступен из интернета и порт 8080 открыт:
+          # curl -fsS http://${HELIOS_HOST}:8080/actuator/health || (echo "Healthcheck failed" && exit 1)
+          echo "Skip smoke test (uncomment curl if доступ есть)."
