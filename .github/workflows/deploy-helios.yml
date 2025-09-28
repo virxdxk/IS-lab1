@@ -1,4 +1,4 @@
-name: Deploy to Helios
+name: Deploy to Helios (no Docker)
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch: {}
 
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     env:
@@ -18,16 +18,49 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Create deploy bundle
-        run: |
-          # Сформируем тар с нужными файлами для сборки на Helios
-          tar -czf bundle.tar.gz \
-            docker-compose.yml \
-            compose.helios.yml \
-            backend \
-            frontend \
-            deploy/helios-deploy.sh
+      # ---------- Build backend (jar)
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
 
+      - name: Grant gradlew
+        run: chmod +x gradlew
+
+      - name: Build backend jar
+        run: ./gradlew :backend:clean :backend:bootJar
+
+      - name: Locate backend artifact
+        id: locate_jar
+        run: |
+          JAR=$(ls backend/build/libs/*-SNAPSHOT.jar || ls backend/build/libs/*.jar | head -n1)
+          echo "jar_path=${JAR}" >> $GITHUB_OUTPUT
+
+      # ---------- Build frontend (static)
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install deps & build frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      # ---------- Create release bundle
+      - name: Create bundle
+        run: |
+          mkdir -p release/backend release/frontend/dist release/deploy
+          cp "${{ steps.locate_jar.outputs.jar_path }}" release/backend/app.jar
+          cp -r frontend/dist/* release/frontend/dist/
+          cp -r deploy/start_backend.sh deploy/stop_backend.sh release/deploy/
+          tar -czf bundle.tar.gz -C release .
+
+      # ---------- Prepare SSH
       - name: Prepare SSH key
         run: |
           mkdir -p ~/.ssh
@@ -35,21 +68,37 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H "${HELIOS_HOST}" >> ~/.ssh/known_hosts
 
-      - name: Upload bundle to Helios
+      # ---------- Upload bundle to Helios
+      - name: Upload and unpack
         run: |
-          ssh -i ~/.ssh/id_ed25519 ${HELIOS_USER}@${HELIOS_HOST} "mkdir -p ${APP_DIR}"
-          scp -i ~/.ssh/id_ed25519 bundle.tar.gz ${HELIOS_USER}@${HELIOS_HOST}:${APP_DIR}/bundle.tar.gz
+          ssh -i ~/.ssh/id_ed25519 ${HELIOS_USER}@${HELIOS_HOST} "mkdir -p ${APP_DIR}/releases ${APP_DIR}/logs"
+          REL=${GITHUB_SHA::8}
+          scp -i ~/.ssh/id_ed25519 bundle.tar.gz ${HELIOS_USER}@${HELIOS_HOST}:${APP_DIR}/releases/${REL}.tar.gz
+          ssh -i ~/.ssh/id_ed25519 ${HELIOS_USER}@${HELIOS_HOST} bash -lc "
+            set -euo pipefail
+            REL=${REL}
+            APP_DIR='${APP_DIR}'
+            mkdir -p \$APP_DIR/releases/\$REL
+            tar -xzf \$APP_DIR/releases/\${REL}.tar.gz -C \$APP_DIR/releases/\$REL
+            rm -f \$APP_DIR/current && ln -s \$APP_DIR/releases/\$REL \$APP_DIR/current
+          "
 
-      - name: Run deploy script on Helios
+      # ---------- Restart backend in screen
+      - name: Restart backend via screen
         env:
           DB_USER: ${{ secrets.DB_USER }}
           DB_PASS: ${{ secrets.DB_PASS }}
         run: |
-          # Передадим переменные окружения с кредами БД в удалённую сессию
-          ssh -i ~/.ssh/id_ed25519 ${HELIOS_USER}@${HELIOS_HOST} \
-            "export APP_DIR='${APP_DIR}'; export DB_USER='${DB_USER}'; export DB_PASS='${DB_PASS}'; bash -lc '${APP_DIR}/deploy/helios-deploy.sh'"
+          ssh -i ~/.ssh/id_ed25519 ${HELIOS_USER}@${HELIOS_HOST} bash -lc "
+            export APP_DIR='${APP_DIR}'; export DB_USER='${DB_USER}'; export DB_PASS='${DB_PASS}';
+            chmod +x \$APP_DIR/current/deploy/start_backend.sh \$APP_DIR/current/deploy/stop_backend.sh || true
+            \$APP_DIR/current/deploy/stop_backend.sh || true
+            \$APP_DIR/current/deploy/start_backend.sh
+          "
 
-      - name: Show running services
+      # ---------- Smoke test (опционально)
+      - name: Smoke test
         run: |
-          ssh -i ~/.ssh/id_ed25519 ${HELIOS_USER}@${HELIOS_HOST} \
-            "docker compose -f ${APP_DIR}/docker-compose.yml -f ${APP_DIR}/compose.helios.yml ps"
+          # Если Helios доступен из интернета и порт 8080 открыт:
+          # curl -fsS http://${HELIOS_HOST}:8080/actuator/health || (echo "Healthcheck failed" && exit 1)
+          echo "Skip smoke test (uncomment curl if доступ есть)."
